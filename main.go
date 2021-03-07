@@ -15,7 +15,6 @@ import (
 	"projetfederateur/models"
 	"projetfederateur/utils"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -34,8 +33,8 @@ func main() {
 	router.HandleFunc("/me", TokenVerifyMiddleWare(protectedEndpoint)).Methods("get")
 	router.HandleFunc("/me/reports", TokenVerifyMiddleWare(getmyreports)).Methods("get")
 	router.HandleFunc("/me/reports", TokenVerifyMiddleWare(createReport)).Methods("post")
-	router.HandleFunc("/locations", TokenVerifyMiddleWare(addLocation)).Methods("post")
-	router.HandleFunc("/users/{id:[0-9]+}/reports", TokenVerifyMiddleWare(getreports)).Methods("get")
+	//router.HandleFunc("/locations", TokenVerifyMiddleWare(addLocation)).Methods("post")
+	router.HandleFunc("/reports", TokenVerifyMiddleWare(getreports)).Methods("get")
 	router.HandleFunc("/users/{id:[0-9]+}", TokenVerifyMiddleWare(getuserbyid)).Methods("get")
 
 
@@ -235,6 +234,7 @@ func createReport(w http.ResponseWriter, r *http.Request){
 
 	json.NewDecoder(r.Body).Decode(&report)
 	userId := user.ID
+	addLocation(report.Lat,report.Lnt)
 	locationId, err := getlocationid(report.Lat,report.Lnt)
 	if err != nil  {
 		message.Message = "Enter correct geolocation "
@@ -242,9 +242,9 @@ func createReport(w http.ResponseWriter, r *http.Request){
 	}
 	now := time.Now()
 	stmt := "insert into reports (Title, Type,Description,Attachment,User_id,Location_id,created_at) values($1, $2, $3, $4, $5, $6,$7) RETURNING id;"
-	err = db.QueryRow(stmt,report.Title, report.Type, report.Description, report.Attachment, userId, locationId, now ).Scan(&report.ID)
+	err = db.QueryRow(stmt,report.Title, report.Type, report.Description, report.Attachment, userId, locationId[0], now ).Scan(&report.ID)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("fazlefnoazefoazef",err)
 	}
 	message.Message = "Post Created"
 
@@ -253,19 +253,18 @@ func createReport(w http.ResponseWriter, r *http.Request){
 
 
 }
-func addLocation(w http.ResponseWriter, r *http.Request)  {
+func addLocation(Lat float64, Lnt float64)  {
 	var location models.Location
-	var message models.Error
-	json.NewDecoder(r.Body).Decode(&location)
+
+	Address := "Casablaca"
+	Name := "Accident"
+	Type := "Accident"
 	stmt := "insert into markers ( name, address, lat, lng, type) values($1, $2, $3, $4, $5) RETURNING id;"
-	err := db.QueryRow(stmt,location.Name, location.Address, location.Lat,location.Lnt, location.Type).Scan(&location.ID)
+	err := db.QueryRow(stmt,Name, Address, Lat, Lnt, Type).Scan(&location.ID)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("aefazefazefazefbbgrfbrt",err)
 	}
-	message.Message = "Post Created"
 
-
-	utils.ResponseJSON(w, message)
 }
 
 func getmyreports(w http.ResponseWriter, r *http.Request){
@@ -306,10 +305,9 @@ func getmyreports(w http.ResponseWriter, r *http.Request){
 func getreports(w http.ResponseWriter, r *http.Request)  {
 	var report models.Report
 
-	vars := mux.Vars(r)
-	id, err := strconv.Atoi(vars["id"])
 
-	row2, err := db.Query(`select * from reports where user_id=$1`, id)
+
+	row2, err := db.Query(`select * from reports `)
 	if err != nil {
 		log.Fatal("error db")
 	}
@@ -336,16 +334,22 @@ func getreports(w http.ResponseWriter, r *http.Request)  {
 	utils.ResponseJSON(w, reports)
 
 }
-func getlocationid (lat float64, lgt float64) (int, error){
+func getlocationid (lat float64, lgt float64) ([]int, error){
 	var location models.Location
-
+	ids := make([]int, 0)
 	fmt.Println(lat,lgt)
-	row := db.QueryRow(`select * from markers where lat=$1 and lng=$2`, lat,lgt)
-	err := row.Scan(&location.ID,&location.Name,&location.Address,&location.Lat,&location.Lnt,&location.Type)
+	row, err := db.Query(`select * from markers where lat=$1 and lng=$2`, lat,lgt)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("db error")
 	}
-	return location.ID, err
+	for row.Next() {
+		err := row.Scan(&location.ID,&location.Name,&location.Address,&location.Lat,&location.Lnt,&location.Type)
+		if err != nil {
+			log.Fatal(err)
+		}
+		ids = append(ids, location.ID )
+	}
+	return ids, err
 }
 
 func getgeolocationfromid(id int ) (float64, float64) {
